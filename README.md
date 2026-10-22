@@ -1,6 +1,8 @@
 # LeanClient for Vencord
 
-LeanClient pauses playing videos when Discord is hidden or when a video scrolls outside the visible page. This may reduce video decoding and background CPU work. It is not a general RAM optimizer and cannot promise a large memory reduction. Vencord plugins do not provide supported control over Discord's message cache or Chromium's process memory policy.
+LeanClient targets media memory on machines with limited RAM. It unloads the source URLs of images and videos while they are outside the visible page, then restores them when they return to view. It also pauses videos when Discord is hidden.
+
+This is an aggressive tradeoff: media can flash or take a moment to reload while scrolling, and videos may need to be started again. Chromium may retain some cached data, so the amount of memory released varies. This does not shrink Discord's message cache, JavaScript heap, or total process memory, and it cannot guarantee a large reduction in Discord's overall RAM use.
 
 ## Install
 
@@ -8,11 +10,9 @@ This is a custom Vencord user plugin. Vencord's official documentation says cust
 
 ## Settings
 
-- **Pause when Discord is hidden**: pauses videos after switching away from Discord.
-- **Pause offscreen videos**: pauses videos outside the visible page area.
-
-Videos may need to be resumed manually when brought back into view. The plugin does not delete cached media, change message history, or alter Discord network requests.
+- **Pause when Discord is hidden**: pauses playing videos after switching away from Discord.
+- **Unload offscreen media**: removes offscreen image and video sources to reduce retained media memory. Sources are restored when scrolled back into view. Disable this setting to keep images loaded and only pause offscreen videos.
 
 ## Status
 
-Initial source draft. It has not been built or runtime-verified against a Vencord checkout. Its effect on RAM has not been measured.
+Updated source draft. It has not been built or runtime-verified against a Vencord checkout. RAM savings have not been measured.

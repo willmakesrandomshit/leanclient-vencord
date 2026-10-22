@@ -2,64 +2,129 @@ import { definePluginSettings } from "@api/Settings";
 import { OptionType } from "@utils/types";
 import definePlugin from "@utils/types";
 
+type SavedAttribute = {
+    element: Element;
+    src: string | null;
+    srcset: string | null;
+};
+
+type MediaElement = HTMLImageElement | HTMLVideoElement;
+
 const settings = definePluginSettings({
     pauseWhenDiscordIsHidden: {
         type: OptionType.BOOLEAN,
         description: "Pause playing videos while Discord is in the background",
         default: true
     },
-    pauseOffscreenVideos: {
+    unloadOffscreenMedia: {
         type: OptionType.BOOLEAN,
-        description: "Pause videos that are outside the visible part of the page",
+        description: "Unload offscreen image and video sources to reduce retained media memory; they reload when scrolled back into view",
         default: true
     }
 });
 
-let observer: IntersectionObserver | undefined;
-const observedVideos = new Set<HTMLVideoElement>();
+let viewportObserver: IntersectionObserver | undefined;
+let pageObserver: MutationObserver | undefined;
+let observedMedia = new WeakSet<MediaElement>();
+const savedSources = new WeakMap<MediaElement, SavedAttribute[]>();
 
-function observeVideo(video: HTMLVideoElement) {
-    if (!settings.store.pauseOffscreenVideos || observedVideos.has(video)) return;
-    observedVideos.add(video);
-    observer?.observe(video);
+function snapshotSources(media: MediaElement): SavedAttribute[] {
+    const elements: Element[] = media instanceof HTMLVideoElement
+        ? [media, ...media.querySelectorAll("source")]
+        : [media];
+
+    return elements.map(element => ({
+        element,
+        src: element.getAttribute("src"),
+        srcset: element.getAttribute("srcset")
+    }));
 }
 
-function pauseVideos() {
+function unloadMedia(media: MediaElement) {
+    if (savedSources.has(media)) return;
+
+    const sources = snapshotSources(media);
+    savedSources.set(media, sources);
+    if (media instanceof HTMLVideoElement) media.pause();
+
+    for (const { element } of sources) {
+        element.removeAttribute("src");
+        element.removeAttribute("srcset");
+    }
+
+    if (media instanceof HTMLVideoElement) media.load();
+}
+
+function restoreMedia(media: MediaElement) {
+    const saved = savedSources.get(media);
+    if (!saved) return;
+
+    for (const { element, src, srcset } of saved) {
+        if (src !== null) element.setAttribute("src", src);
+        if (srcset !== null) element.setAttribute("srcset", srcset);
+    }
+
+    savedSources.delete(media);
+    if (media instanceof HTMLVideoElement) media.load();
+}
+
+function observeMedia(media: MediaElement) {
+    if (observedMedia.has(media)) return;
+    observedMedia.add(media);
+    viewportObserver?.observe(media);
+}
+
+function observeTree(node: Node) {
+    if (!(node instanceof Element)) return;
+
+    if (node.matches("img, video")) observeMedia(node as MediaElement);
+    node.querySelectorAll("img, video").forEach(media => observeMedia(media as MediaElement));
+}
+
+function pausePlayingVideos() {
     document.querySelectorAll("video").forEach(video => video.pause());
 }
 
 function onVisibilityChange() {
-    if (settings.store.pauseWhenDiscordIsHidden && document.hidden) pauseVideos();
-}
-
-function onVideoPlay(event: Event) {
-    if (event.target instanceof HTMLVideoElement) observeVideo(event.target);
+    if (settings.store.pauseWhenDiscordIsHidden && document.hidden) pausePlayingVideos();
 }
 
 export default definePlugin({
     name: "LeanClient",
-    description: "Reduces background media work by pausing videos when they are hidden or offscreen.",
+    description: "Unloads offscreen media sources and pauses background videos to reduce media memory and work.",
     authors: [],
     settings,
 
     start() {
-        observer = new IntersectionObserver(entries => {
+        viewportObserver = new IntersectionObserver(entries => {
             for (const entry of entries) {
-                if (!entry.isIntersecting) (entry.target as HTMLVideoElement).pause();
+                const media = entry.target as MediaElement;
+                if (entry.isIntersecting) {
+                    restoreMedia(media);
+                } else if (settings.store.unloadOffscreenMedia) {
+                    unloadMedia(media);
+                } else if (media instanceof HTMLVideoElement) {
+                    media.pause();
+                }
             }
         });
 
-        document.querySelectorAll("video").forEach(observeVideo);
-        document.addEventListener("play", onVideoPlay, true);
+        document.querySelectorAll("img, video").forEach(media => observeMedia(media as MediaElement));
+        pageObserver = new MutationObserver(records => {
+            for (const record of records) record.addedNodes.forEach(observeTree);
+        });
+        pageObserver.observe(document.body, { childList: true, subtree: true });
         document.addEventListener("visibilitychange", onVisibilityChange);
         onVisibilityChange();
     },
 
     stop() {
-        document.removeEventListener("play", onVideoPlay, true);
         document.removeEventListener("visibilitychange", onVisibilityChange);
-        observer?.disconnect();
-        observer = undefined;
-        observedVideos.clear();
+        pageObserver?.disconnect();
+        pageObserver = undefined;
+        viewportObserver?.disconnect();
+        viewportObserver = undefined;
+        observedMedia = new WeakSet<MediaElement>();
+        document.querySelectorAll("img, video").forEach(media => restoreMedia(media as MediaElement));
     }
 });
