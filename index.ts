@@ -63,8 +63,8 @@ const settings = definePluginSettings({
     },
     disableInlineMedia: {
         type: OptionType.BOOLEAN,
-        description: "Hide inline attachments and embeds to avoid loading their media; click links to open them. Original preferences are restored when this is turned off",
-        default: false,
+        description: "Aggressive low-memory mode: hide inline attachments and embeds to avoid loading their media; click links to open them. Original preferences are restored when this is turned off",
+        default: true,
         onChange: enabled => applyPreferences([
             ["inlineAttachmentMedia", "savedInlineAttachmentMedia"],
             ["inlineEmbedMedia", "savedInlineEmbedMedia"],
@@ -287,7 +287,7 @@ function onVisibilityChange() {
 
 export default definePlugin({
     name: "LeanClient",
-    description: "Unloads offscreen media sources and pauses background videos to reduce media memory and work.",
+    description: "Aggressively reduces automatically loaded media, unloads offscreen media sources, and pauses background videos.",
     authors: [],
     settings,
 
