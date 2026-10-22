@@ -29,6 +29,20 @@ const settings = definePluginSettings({
         type: OptionType.BOOLEAN,
         description: "Unload image and URL-backed video sources while Discord is in the background; they reload when Discord is shown again",
         default: true
+    },
+    pauseOffscreenLiveVideo: {
+        type: OptionType.BOOLEAN,
+        description: "Pause playback of live video elements while offscreen, then resume them when visible; the call and outgoing stream remain connected",
+        default: true,
+        onChange: enabled => {
+            document.querySelectorAll("video").forEach(video => {
+                if (!enabled) resumeOffscreenLiveVideo(video);
+                else {
+                    viewportObserver?.unobserve(video);
+                    viewportObserver?.observe(video);
+                }
+            });
+        }
     }
 });
 
@@ -37,6 +51,38 @@ let pageObserver: MutationObserver | undefined;
 let observedMedia = new WeakSet<MediaElement>();
 const savedSources = new WeakMap<MediaElement, SavedAttribute[]>();
 const hiddenUnloadedMedia = new WeakSet<MediaElement>();
+const pausedOffscreenLiveVideos = new WeakSet<HTMLVideoElement>();
+
+function resumeOffscreenLiveVideo(video: HTMLVideoElement) {
+    if (!pausedOffscreenLiveVideos.has(video)) return;
+
+    pausedOffscreenLiveVideos.delete(video);
+    if (video.srcObject !== null) void video.play().catch(() => {});
+}
+
+function updateLiveVideoPlayback(video: HTMLVideoElement) {
+    if (video.srcObject === null || !settings.store.pauseOffscreenLiveVideo) {
+        resumeOffscreenLiveVideo(video);
+        return;
+    }
+
+    const bounds = video.getBoundingClientRect();
+    const isInViewport = !document.hidden
+        && bounds.bottom > 0
+        && bounds.right > 0
+        && bounds.top < window.innerHeight
+        && bounds.left < window.innerWidth;
+
+    if (isInViewport) resumeOffscreenLiveVideo(video);
+    else if (!video.paused) {
+        video.pause();
+        pausedOffscreenLiveVideos.add(video);
+    }
+}
+
+function onVideoMetadata(event: Event) {
+    if (event.target instanceof HTMLVideoElement) updateLiveVideoPlayback(event.target);
+}
 
 function hasUnloadableSource(media: MediaElement) {
     if (media instanceof HTMLVideoElement && media.srcObject !== null) return false;
@@ -153,6 +199,7 @@ export default definePlugin({
                 const media = entry.target as MediaElement;
                 if (media instanceof HTMLVideoElement && media.srcObject !== null) {
                     savedSources.delete(media);
+                    updateLiveVideoPlayback(media);
                     continue;
                 }
                 if (entry.isIntersecting) {
@@ -170,11 +217,13 @@ export default definePlugin({
             for (const record of records) record.addedNodes.forEach(observeTree);
         });
         pageObserver.observe(document.body, { childList: true, subtree: true });
+        document.addEventListener("loadedmetadata", onVideoMetadata, true);
         document.addEventListener("visibilitychange", onVisibilityChange);
         onVisibilityChange();
     },
 
     stop() {
+        document.removeEventListener("loadedmetadata", onVideoMetadata, true);
         document.removeEventListener("visibilitychange", onVisibilityChange);
         pageObserver?.disconnect();
         pageObserver = undefined;
@@ -182,6 +231,7 @@ export default definePlugin({
         viewportObserver = undefined;
         observedMedia = new WeakSet<MediaElement>();
         document.querySelectorAll("img, video").forEach(media => restoreMedia(media as MediaElement));
+        document.querySelectorAll("video").forEach(video => resumeOffscreenLiveVideo(video));
     }
 });
 
