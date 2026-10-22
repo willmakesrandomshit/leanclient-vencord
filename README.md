@@ -13,6 +13,6 @@ This is a custom Vencord user plugin. Vencord's official documentation says cust
 - **Pause when Discord is hidden**: pauses playing videos after switching away from Discord.
 - **Unload offscreen media**: removes offscreen image and video sources to reduce retained media memory. Sources are restored when scrolled back into view. Disable this setting to keep images loaded and only pause offscreen videos.
 
-## Status
+## Verification status
 
-Updated source draft. It has not been built or runtime-verified against a Vencord checkout. RAM savings have not been measured.
+The plugin compiled in a Vencord development build, passed Vencord's TypeScript check, and passed its plugin lint check. It has not been runtime-tested in Discord, and RAM, CPU, and GPU savings have not been measured.
