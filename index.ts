@@ -32,7 +32,7 @@ const settings = definePluginSettings({
     },
     pauseOffscreenLiveVideo: {
         type: OptionType.BOOLEAN,
-        description: "Pause playback of live video elements while offscreen, then resume them when visible; the call and outgoing stream remain connected",
+        description: "Pause playback of live video elements while offscreen or while Discord is hidden, then resume them when visible; the call and outgoing stream remain connected",
         default: true,
         onChange: enabled => {
             document.querySelectorAll("video").forEach(video => {
@@ -173,6 +173,14 @@ function pausePlayingVideos() {
 function onVisibilityChange() {
     if (document.hidden) {
         if (settings.store.pauseWhenDiscordIsHidden) pausePlayingVideos();
+        if (settings.store.pauseOffscreenLiveVideo) {
+            document.querySelectorAll("video").forEach(video => {
+                if (video.srcObject !== null && !video.paused) {
+                    video.pause();
+                    pausedOffscreenLiveVideos.add(video);
+                }
+            });
+        }
         if (settings.store.unloadMediaWhenDiscordIsHidden) {
             document.querySelectorAll("img, video").forEach(media => {
                 const element = media as MediaElement;
@@ -180,6 +188,7 @@ function onVisibilityChange() {
             });
         }
     } else {
+        document.querySelectorAll("video").forEach(video => resumeOffscreenLiveVideo(video));
         document.querySelectorAll("img, video").forEach(media => {
             const element = media as MediaElement;
             if (hiddenUnloadedMedia.has(element)) restoreMedia(element);
