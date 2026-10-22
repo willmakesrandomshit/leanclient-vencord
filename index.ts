@@ -83,14 +83,6 @@ const settings = definePluginSettings({
             ["textAndImages", "renderReactions", "savedRenderReactions", false]
         ], enabled)
     },
-    disableStreamPreviews: {
-        type: OptionType.BOOLEAN,
-        description: "Disable Discord stream preview cards; this may reduce preview rendering while screen sharing, but savings are unmeasured",
-        default: true,
-        onChange: enabled => applyPreferences([
-            ["voiceAndVideo", "disableStreamPreviews", "savedDisableStreamPreviews", true]
-        ], enabled)
-    },
     savedGifAutoPlay: {
         type: OptionType.SELECT,
         description: "Internal restore state",
@@ -128,12 +120,6 @@ const settings = definePluginSettings({
         options: savedPreferenceOptions
     },
     savedRenderReactions: {
-        type: OptionType.SELECT,
-        description: "Internal restore state",
-        hidden: true,
-        options: savedPreferenceOptions
-    },
-    savedDisableStreamPreviews: {
         type: OptionType.SELECT,
         description: "Internal restore state",
         hidden: true,
@@ -186,8 +172,7 @@ type SavedPreferenceKey =
     | "savedInlineEmbedMedia"
     | "savedRenderEmbeds"
     | "savedAnimateStickers"
-    | "savedRenderReactions"
-    | "savedDisableStreamPreviews";
+    | "savedRenderReactions";
 
 function encodePreference(value: unknown): SavedPreference | undefined {
     if (typeof value === "boolean") return `boolean:${value}`;
@@ -361,9 +346,6 @@ export default definePlugin({
         applyPreferences([
             ["textAndImages", "renderReactions", "savedRenderReactions", false]
         ], settings.store.disableReactions);
-        applyPreferences([
-            ["voiceAndVideo", "disableStreamPreviews", "savedDisableStreamPreviews", true]
-        ], settings.store.disableStreamPreviews);
 
         viewportObserver = new IntersectionObserver(entries => {
             for (const entry of entries) {
@@ -401,8 +383,7 @@ export default definePlugin({
             ["textAndImages", "inlineAttachmentMedia", "savedInlineAttachmentMedia", false],
             ["textAndImages", "inlineEmbedMedia", "savedInlineEmbedMedia", false],
             ["textAndImages", "renderEmbeds", "savedRenderEmbeds", false],
-            ["textAndImages", "renderReactions", "savedRenderReactions", false],
-            ["voiceAndVideo", "disableStreamPreviews", "savedDisableStreamPreviews", true]
+            ["textAndImages", "renderReactions", "savedRenderReactions", false]
         ], false);
         document.removeEventListener("loadedmetadata", onVideoMetadata, true);
         document.removeEventListener("visibilitychange", onVisibilityChange);
