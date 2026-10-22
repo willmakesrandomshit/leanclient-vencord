@@ -32,6 +32,14 @@ let pageObserver: MutationObserver | undefined;
 let observedMedia = new WeakSet<MediaElement>();
 const savedSources = new WeakMap<MediaElement, SavedAttribute[]>();
 
+function hasUnloadableSource(media: MediaElement) {
+    if (media instanceof HTMLVideoElement && media.srcObject !== null) return false;
+    if (media.hasAttribute("src") || (media instanceof HTMLVideoElement && media.hasAttribute("poster"))) return true;
+
+    return media.querySelector("source[src], source[srcset]") !== null
+        || (media instanceof HTMLImageElement && Boolean(media.closest("picture")?.querySelector("source[src], source[srcset]")));
+}
+
 function snapshotSources(media: MediaElement): SavedAttribute[] {
     const elements: Element[] = media instanceof HTMLVideoElement
         ? [media, ...media.querySelectorAll("source")]
@@ -53,7 +61,7 @@ function snapshotSources(media: MediaElement): SavedAttribute[] {
 }
 
 function unloadMedia(media: MediaElement) {
-    if (savedSources.has(media)) return;
+    if (savedSources.has(media) || !hasUnloadableSource(media)) return;
 
     const sources = snapshotSources(media);
     savedSources.set(media, sources);
@@ -69,6 +77,13 @@ function unloadMedia(media: MediaElement) {
 function restoreMedia(media: MediaElement) {
     const saved = savedSources.get(media);
     if (!saved) return;
+
+    // Discord can repurpose a video element for a live WebRTC stream while its
+    // original URL is unloaded. Never restore that stale URL over the stream.
+    if (media instanceof HTMLVideoElement && media.srcObject !== null) {
+        savedSources.delete(media);
+        return;
+    }
 
     for (const { element, attributes } of saved) {
         for (const { name, value } of attributes) element.setAttribute(name, value);
@@ -92,7 +107,9 @@ function observeTree(node: Node) {
 }
 
 function pausePlayingVideos() {
-    document.querySelectorAll("video").forEach(video => video.pause());
+    document.querySelectorAll("video").forEach(video => {
+        if (video.srcObject === null) video.pause();
+    });
 }
 
 function onVisibilityChange() {
@@ -101,7 +118,7 @@ function onVisibilityChange() {
 
 export default definePlugin({
     name: "LeanClient",
-    description: "Unloads offscreen image, picture-source, video, and poster resources and pauses background videos to reduce media memory and work.",
+    description: "Unloads offscreen media sources and pauses background videos to reduce media memory and work.",
     authors: [],
     settings,
 
@@ -109,6 +126,10 @@ export default definePlugin({
         viewportObserver = new IntersectionObserver(entries => {
             for (const entry of entries) {
                 const media = entry.target as MediaElement;
+                if (media instanceof HTMLVideoElement && media.srcObject !== null) {
+                    savedSources.delete(media);
+                    continue;
+                }
                 if (entry.isIntersecting) {
                     restoreMedia(media);
                 } else if (settings.store.unloadOffscreenMedia) {
@@ -138,3 +159,4 @@ export default definePlugin({
         document.querySelectorAll("img, video").forEach(media => restoreMedia(media as MediaElement));
     }
 });
+
