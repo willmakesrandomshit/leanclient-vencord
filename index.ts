@@ -44,7 +44,7 @@ const settings = definePluginSettings({
     pauseOffscreenLiveVideo: {
         type: OptionType.BOOLEAN,
         description: "Pause playback of live video elements while offscreen or while Discord is hidden, then resume them when visible; the call and outgoing stream remain connected",
-        default: true,
+        default: false,
         onChange: enabled => {
             document.querySelectorAll("video").forEach(video => {
                 if (!enabled) resumeOffscreenLiveVideo(video);
@@ -58,7 +58,7 @@ const settings = definePluginSettings({
     disableAnimatedMedia: {
         type: OptionType.BOOLEAN,
         description: "Disable GIF autoplay, animated emoji, and sticker animation to reduce animated media work; saved preferences are restored when this is turned off",
-        default: true,
+        default: false,
         onChange: enabled => applyPreferences([
             ["textAndImages", "gifAutoPlay", "savedGifAutoPlay", false],
             ["textAndImages", "animateEmoji", "savedAnimateEmoji", false],
@@ -67,8 +67,8 @@ const settings = definePluginSettings({
     },
     disableInlineMedia: {
         type: OptionType.BOOLEAN,
-        description: "Aggressive low-memory mode: hide inline attachments and embeds to avoid loading their media; click links to open them. Original preferences are restored when this is turned off",
-        default: true,
+        description: "Optional aggressive mode: hide inline attachments and embeds to avoid loading their media; click links to open them. Original preferences are restored when this is turned off",
+        default: false,
         onChange: enabled => applyPreferences([
             ["textAndImages", "inlineAttachmentMedia", "savedInlineAttachmentMedia", false],
             ["textAndImages", "inlineEmbedMedia", "savedInlineEmbedMedia", false],
@@ -78,7 +78,7 @@ const settings = definePluginSettings({
     disableReactions: {
         type: OptionType.BOOLEAN,
         description: "Disable reaction rendering to avoid loading reaction UI and emoji; reactions are hidden until this is turned off",
-        default: true,
+        default: false,
         onChange: enabled => applyPreferences([
             ["textAndImages", "renderReactions", "savedRenderReactions", false]
         ], enabled)
