@@ -14,12 +14,15 @@ type SavedAttribute = {
 };
 
 type MediaElement = HTMLImageElement | HTMLVideoElement;
-type SavedPreference = "unset" | "true" | "false";
+type SavedPreference = "unset" | "boolean:true" | "boolean:false" | "number:0" | "number:1" | "number:2";
 
 const savedPreferenceOptions = [
     { label: "Not saved", value: "unset", default: true },
-    { label: "Was enabled", value: "true" },
-    { label: "Was disabled", value: "false" }
+    { label: "Was enabled", value: "boolean:true" },
+    { label: "Was disabled", value: "boolean:false" },
+    { label: "Was set to Always", value: "number:0" },
+    { label: "Was set to On Interaction", value: "number:1" },
+    { label: "Was set to Never", value: "number:2" }
 ] as const;
 
 const settings = definePluginSettings({
@@ -54,11 +57,12 @@ const settings = definePluginSettings({
     },
     disableAnimatedMedia: {
         type: OptionType.BOOLEAN,
-        description: "Disable automatic GIF playback and animated emoji to reduce media decoding; original preferences are restored when this is turned off",
+        description: "Disable GIF autoplay, animated emoji, and sticker animation to reduce animated media work; saved preferences are restored when this is turned off",
         default: true,
         onChange: enabled => applyPreferences([
-            ["gifAutoPlay", "savedGifAutoPlay"],
-            ["animateEmoji", "savedAnimateEmoji"]
+            ["textAndImages", "gifAutoPlay", "savedGifAutoPlay", false],
+            ["textAndImages", "animateEmoji", "savedAnimateEmoji", false],
+            ["textAndImages", "animateStickers", "savedAnimateStickers", 2]
         ], enabled)
     },
     disableInlineMedia: {
@@ -66,9 +70,25 @@ const settings = definePluginSettings({
         description: "Aggressive low-memory mode: hide inline attachments and embeds to avoid loading their media; click links to open them. Original preferences are restored when this is turned off",
         default: true,
         onChange: enabled => applyPreferences([
-            ["inlineAttachmentMedia", "savedInlineAttachmentMedia"],
-            ["inlineEmbedMedia", "savedInlineEmbedMedia"],
-            ["renderEmbeds", "savedRenderEmbeds"]
+            ["textAndImages", "inlineAttachmentMedia", "savedInlineAttachmentMedia", false],
+            ["textAndImages", "inlineEmbedMedia", "savedInlineEmbedMedia", false],
+            ["textAndImages", "renderEmbeds", "savedRenderEmbeds", false]
+        ], enabled)
+    },
+    disableReactions: {
+        type: OptionType.BOOLEAN,
+        description: "Disable reaction rendering to avoid loading reaction UI and emoji; reactions are hidden until this is turned off",
+        default: true,
+        onChange: enabled => applyPreferences([
+            ["textAndImages", "renderReactions", "savedRenderReactions", false]
+        ], enabled)
+    },
+    disableStreamPreviews: {
+        type: OptionType.BOOLEAN,
+        description: "Disable Discord stream preview cards; this may reduce preview rendering while screen sharing, but savings are unmeasured",
+        default: true,
+        onChange: enabled => applyPreferences([
+            ["voiceAndVideo", "disableStreamPreviews", "savedDisableStreamPreviews", true]
         ], enabled)
     },
     savedGifAutoPlay: {
@@ -96,6 +116,24 @@ const settings = definePluginSettings({
         options: savedPreferenceOptions
     },
     savedRenderEmbeds: {
+        type: OptionType.SELECT,
+        description: "Internal restore state",
+        hidden: true,
+        options: savedPreferenceOptions
+    },
+    savedAnimateStickers: {
+        type: OptionType.SELECT,
+        description: "Internal restore state",
+        hidden: true,
+        options: savedPreferenceOptions
+    },
+    savedRenderReactions: {
+        type: OptionType.SELECT,
+        description: "Internal restore state",
+        hidden: true,
+        options: savedPreferenceOptions
+    },
+    savedDisableStreamPreviews: {
         type: OptionType.SELECT,
         description: "Internal restore state",
         hidden: true,
@@ -146,28 +184,46 @@ type SavedPreferenceKey =
     | "savedAnimateEmoji"
     | "savedInlineAttachmentMedia"
     | "savedInlineEmbedMedia"
-    | "savedRenderEmbeds";
+    | "savedRenderEmbeds"
+    | "savedAnimateStickers"
+    | "savedRenderReactions"
+    | "savedDisableStreamPreviews";
 
-function applyPreferences(preferences: Array<[string, SavedPreferenceKey]>, disable: boolean) {
+function encodePreference(value: unknown): SavedPreference | undefined {
+    if (typeof value === "boolean") return `boolean:${value}`;
+    if (value === 0 || value === 1 || value === 2) return `number:${value}`;
+}
+
+function decodePreference(value: SavedPreference): boolean | number | undefined {
+    if (value === "boolean:true") return true;
+    if (value === "boolean:false") return false;
+    if (value === "number:0") return 0;
+    if (value === "number:1") return 1;
+    if (value === "number:2") return 2;
+}
+
+function applyPreferences(preferences: Array<[string, string, SavedPreferenceKey, boolean | number]>, disable: boolean) {
     const store = settings.store as Record<SavedPreferenceKey, SavedPreference>;
 
-    for (const [name, savedKey] of preferences) {
+    for (const [group, name, savedKey, disabledValue] of preferences) {
         let preference;
         try {
-            preference = getUserSetting<boolean>("textAndImages", name);
+            preference = getUserSetting<unknown>(group, name);
         } catch {
             continue;
         }
         if (!preference) continue;
 
         const current = preference.getSetting();
-        if (typeof current !== "boolean") continue;
+        const encoded = encodePreference(current);
+        if (encoded === undefined) continue;
 
         if (disable) {
-            if (store[savedKey] === "unset") store[savedKey] = current ? "true" : "false";
-            if (current) void preference.updateSetting(false);
+            if (store[savedKey] === "unset") store[savedKey] = encoded;
+            if (current !== disabledValue) void preference.updateSetting(disabledValue);
         } else if (store[savedKey] !== "unset") {
-            if (current === false) void preference.updateSetting(store[savedKey] === "true");
+            const original = decodePreference(store[savedKey]);
+            if (current === disabledValue && original !== undefined) void preference.updateSetting(original);
             store[savedKey] = "unset";
         }
     }
@@ -293,14 +349,21 @@ export default definePlugin({
 
     start() {
         applyPreferences([
-            ["gifAutoPlay", "savedGifAutoPlay"],
-            ["animateEmoji", "savedAnimateEmoji"]
+            ["textAndImages", "gifAutoPlay", "savedGifAutoPlay", false],
+            ["textAndImages", "animateEmoji", "savedAnimateEmoji", false],
+            ["textAndImages", "animateStickers", "savedAnimateStickers", 2]
         ], settings.store.disableAnimatedMedia);
         applyPreferences([
-            ["inlineAttachmentMedia", "savedInlineAttachmentMedia"],
-            ["inlineEmbedMedia", "savedInlineEmbedMedia"],
-            ["renderEmbeds", "savedRenderEmbeds"]
+            ["textAndImages", "inlineAttachmentMedia", "savedInlineAttachmentMedia", false],
+            ["textAndImages", "inlineEmbedMedia", "savedInlineEmbedMedia", false],
+            ["textAndImages", "renderEmbeds", "savedRenderEmbeds", false]
         ], settings.store.disableInlineMedia);
+        applyPreferences([
+            ["textAndImages", "renderReactions", "savedRenderReactions", false]
+        ], settings.store.disableReactions);
+        applyPreferences([
+            ["voiceAndVideo", "disableStreamPreviews", "savedDisableStreamPreviews", true]
+        ], settings.store.disableStreamPreviews);
 
         viewportObserver = new IntersectionObserver(entries => {
             for (const entry of entries) {
@@ -332,11 +395,14 @@ export default definePlugin({
 
     stop() {
         applyPreferences([
-            ["gifAutoPlay", "savedGifAutoPlay"],
-            ["animateEmoji", "savedAnimateEmoji"],
-            ["inlineAttachmentMedia", "savedInlineAttachmentMedia"],
-            ["inlineEmbedMedia", "savedInlineEmbedMedia"],
-            ["renderEmbeds", "savedRenderEmbeds"]
+            ["textAndImages", "gifAutoPlay", "savedGifAutoPlay", false],
+            ["textAndImages", "animateEmoji", "savedAnimateEmoji", false],
+            ["textAndImages", "animateStickers", "savedAnimateStickers", 2],
+            ["textAndImages", "inlineAttachmentMedia", "savedInlineAttachmentMedia", false],
+            ["textAndImages", "inlineEmbedMedia", "savedInlineEmbedMedia", false],
+            ["textAndImages", "renderEmbeds", "savedRenderEmbeds", false],
+            ["textAndImages", "renderReactions", "savedRenderReactions", false],
+            ["voiceAndVideo", "disableStreamPreviews", "savedDisableStreamPreviews", true]
         ], false);
         document.removeEventListener("loadedmetadata", onVideoMetadata, true);
         document.removeEventListener("visibilitychange", onVisibilityChange);
