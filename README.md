@@ -1,6 +1,6 @@
 # LeanClient for Vencord
 
-LeanClient targets memory retained by media on machines with limited RAM. It unloads image and video URLs while they are outside the visible page, including responsive sources inside `<picture>` and video poster images, then restores them when they return to view. It also pauses videos when Discord is hidden.
+LeanClient targets memory retained by media on machines with limited RAM. It unloads image and video URLs while they are outside the visible page, including responsive sources inside `<picture>` and video poster images, then restores them when they return to view. It also pauses URL-backed videos when Discord is hidden. Live WebRTC video streams are left alone.
 
 This is an aggressive, media-specific tradeoff: images can flash or take a moment to reload while scrolling, and videos may need to be started again. Chromium may retain some cached data, so the amount of memory released varies. This does not shrink Discord's message cache, JavaScript heap, or total process memory, and it cannot guarantee a large reduction in Discord's overall RAM use.
 
@@ -10,8 +10,8 @@ This is a custom Vencord user plugin. Vencord's official documentation says cust
 
 ## Settings
 
-- **Pause when Discord is hidden**: pauses playing videos after switching away from Discord.
-- **Unload offscreen media**: removes offscreen image, picture-source, video, and poster URLs to reduce retained media memory. Sources are restored when scrolled back into view. Disable this setting to keep images loaded and only pause offscreen videos.
+- **Pause when Discord is hidden**: pauses playing URL-backed videos after switching away from Discord. Live WebRTC streams are not paused.
+- **Unload offscreen media**: removes offscreen image, picture-source, video, and poster URLs to reduce retained media memory. Sources are restored when scrolled back into view. Disable this setting to keep images loaded and only pause offscreen URL-backed videos.
 
 ## Verification status
 
