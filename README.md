@@ -18,3 +18,11 @@ This is a custom Vencord user plugin. Vencord's official documentation says cust
 ## Verification status
 
 The current source passed Vencord's TypeScript check and lint check, and the full Vencord package built with the plugin included. This latest build has not been installed into the running Discord app, and no controlled on/off memory comparison has been completed. RAM, CPU, and GPU savings are unmeasured. The offscreen live-video option has only been build-checked, not runtime-tested during a call. Its memory effect is unknown.
+
+## Additional built-in settings
+
+For media-heavy channels, Discord's Accessibility settings include **Automatically play GIFs when Discord is focused**. Turning this off can avoid animating many GIFs at once, at the cost of needing to start animations manually. See [Discord's Accessibility settings guide](https://support.discord.com/hc/en-us/articles/1500010454681-Accessibility-Settings-Tab).
+
+While sharing your screen, choose the lowest resolution and frame rate that still works for the audience. This reduces the sender's capture and encoding workload, but lowers stream quality; Discord exposes these controls in its desktop screen-share settings. See [Discord's screen-share guide](https://support.discord.com/hc/en-us/articles/360040816151-Go-Live-and-Screen-Share).
+
+These settings can reduce media work in their respective cases, but neither puts a cap on Discord's total RAM use. LeanClient does not change them automatically.
