@@ -17,7 +17,7 @@ For outgoing screen shares, Discord's own resolution and frame-rate controls can
 - **Unload media when Discord is hidden**: unloads image and URL-backed video sources in the background and restores them when Discord returns.
 - **Pause offscreen live video**: pauses playback of offscreen live video elements, then resumes them when visible. Voice and outgoing stream transmission remain connected; WebRTC may continue receiving and buffering video.
 - **Disable animated media**: turns off Discord's GIF autoplay and animated emoji settings while LeanClient is active, restoring saved preferences when disabled or stopped.
-- **Disable inline media**: optionally turns off inline attachments and embeds. This is off by default because it changes how chat content appears. The plugin restores saved preferences when disabled or stopped.
+- **Disable inline media**: turns off inline attachments and embeds by default for the aggressive low-memory profile. This changes how chat content appears; click links to open media. Turn it off to restore the saved Discord preferences. The plugin also restores them when stopped.
 
 ## Install
 
