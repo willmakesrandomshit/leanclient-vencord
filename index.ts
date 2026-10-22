@@ -9,8 +9,7 @@ import definePlugin, { OptionType } from "@utils/types";
 
 type SavedAttribute = {
     element: Element;
-    src: string | null;
-    srcset: string | null;
+    attributes: Array<{ name: string; value: string }>;
 };
 
 type MediaElement = HTMLImageElement | HTMLVideoElement;
@@ -36,13 +35,21 @@ const savedSources = new WeakMap<MediaElement, SavedAttribute[]>();
 function snapshotSources(media: MediaElement): SavedAttribute[] {
     const elements: Element[] = media instanceof HTMLVideoElement
         ? [media, ...media.querySelectorAll("source")]
-        : [media];
+        : [media, ...(media.closest("picture")?.querySelectorAll("source") ?? [])];
 
-    return elements.map(element => ({
-        element,
-        src: element.getAttribute("src"),
-        srcset: element.getAttribute("srcset")
-    }));
+    return elements.map(element => {
+        const names = element === media && media instanceof HTMLVideoElement
+            ? ["src", "srcset", "poster"]
+            : ["src", "srcset"];
+
+        return {
+            element,
+            attributes: names.flatMap(name => {
+                const value = element.getAttribute(name);
+                return value === null ? [] : [{ name, value }];
+            })
+        };
+    });
 }
 
 function unloadMedia(media: MediaElement) {
@@ -52,9 +59,8 @@ function unloadMedia(media: MediaElement) {
     savedSources.set(media, sources);
     if (media instanceof HTMLVideoElement) media.pause();
 
-    for (const { element } of sources) {
-        element.removeAttribute("src");
-        element.removeAttribute("srcset");
+    for (const { element, attributes } of sources) {
+        for (const { name } of attributes) element.removeAttribute(name);
     }
 
     if (media instanceof HTMLVideoElement) media.load();
@@ -64,9 +70,8 @@ function restoreMedia(media: MediaElement) {
     const saved = savedSources.get(media);
     if (!saved) return;
 
-    for (const { element, src, srcset } of saved) {
-        if (src !== null) element.setAttribute("src", src);
-        if (srcset !== null) element.setAttribute("srcset", srcset);
+    for (const { element, attributes } of saved) {
+        for (const { name, value } of attributes) element.setAttribute(name, value);
     }
 
     savedSources.delete(media);
@@ -96,7 +101,7 @@ function onVisibilityChange() {
 
 export default definePlugin({
     name: "LeanClient",
-    description: "Unloads offscreen media sources and pauses background videos to reduce media memory and work.",
+    description: "Unloads offscreen image, picture-source, video, and poster resources and pauses background videos to reduce media memory and work.",
     authors: [],
     settings,
 
