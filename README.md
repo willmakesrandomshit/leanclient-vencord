@@ -2,7 +2,7 @@
 
 LeanClient reduces memory retained by media where a Vencord plugin can safely intervene. It unloads offscreen image and URL-backed video sources, can unload those sources while Discord is hidden, pauses background videos, stops GIF autoplay and animated emoji/stickers, hides inline attachments and embeds, and can hide reactions.
 
-The defaults are intentionally aggressive and trade convenience for lower media use. Offscreen media reloads when it returns to view. Disabling autoplay and sticker animation removes motion. Disabling inline media means opening links to see attachments and embeds. Disabling reaction rendering hides reactions. Chromium may retain cached data, so the amount released varies.
+The defaults preserve normal chat and call features: animations, inline attachments, embeds, reactions, and live call video remain enabled. The lower-impact offscreen and background media controls are on; media may take a moment to reload when you return to it. Optional aggressive switches can disable animation, inline media, or reactions, with those visible tradeoffs. Chromium may retain cached data, so the amount released varies.
 
 ## Voice and screen sharing
 
@@ -15,10 +15,10 @@ Discord's Accessibility settings include reduced motion, GIF autoplay, animated 
 - **Pause when Discord is hidden**: pauses URL-backed videos when Discord is in the background.
 - **Unload offscreen media**: unloads offscreen image and URL-backed video sources, restoring them when visible.
 - **Unload media when Discord is hidden**: unloads image and URL-backed video sources in the background and restores them when Discord returns.
-- **Pause offscreen live video**: pauses playback of offscreen live video elements, then resumes them when visible. Voice and outgoing stream transmission remain connected; WebRTC may continue receiving and buffering video.
-- **Disable animated media**: turns off Discord's GIF autoplay and animated emoji and sets sticker animation to Never while LeanClient is active, restoring saved preferences when disabled or stopped.
-- **Disable inline media**: turns off inline attachments and embeds by default for the aggressive low-memory profile. This changes how chat content appears; click links to open media. Turn it off to restore the saved Discord preferences. The plugin also restores them when stopped.
-- **Disable reactions**: stops rendering reactions by default. Turn it off to restore Discord's saved preference.
+- **Pause offscreen live video**: optionally pauses playback of offscreen live video elements, then resumes them when visible. Off by default to keep call video behaving normally. Voice and outgoing stream transmission remain connected; WebRTC may continue receiving and buffering video.
+- **Disable animated media**: optionally turns off Discord's GIF autoplay and animated emoji and sets sticker animation to Never while LeanClient is active, restoring saved preferences when disabled or stopped. Off by default.
+- **Disable inline media**: optionally turns off inline attachments and embeds. This changes how chat content appears; click links to open media. Off by default, and saved Discord preferences are restored when disabled or stopped.
+- **Disable reactions**: optionally stops rendering reactions. Off by default, and the saved Discord preference is restored when disabled or stopped.
 
 ## Install
 
