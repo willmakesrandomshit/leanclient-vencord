@@ -26,6 +26,25 @@ const savedPreferenceOptions = [
 ] as const;
 
 const settings = definePluginSettings({
+    maximumRamMode: {
+        type: OptionType.BOOLEAN,
+        description: "Maximum RAM mode: unload offscreen media and supported players, pause offscreen call video, disable animations, inline media, and reactions. Some content will be hidden or reload when revisited",
+        default: false,
+        onChange: enabled => {
+            maximumRamModeActive = enabled;
+            applyPreferences([
+                ["textAndImages", "gifAutoPlay", "savedGifAutoPlay", false],
+                ["textAndImages", "animateEmoji", "savedAnimateEmoji", false],
+                ["textAndImages", "animateStickers", "savedAnimateStickers", 2],
+                ["textAndImages", "inlineAttachmentMedia", "savedInlineAttachmentMedia", false],
+                ["textAndImages", "inlineEmbedMedia", "savedInlineEmbedMedia", false],
+                ["textAndImages", "renderEmbeds", "savedRenderEmbeds", false],
+                ["textAndImages", "renderReactions", "savedRenderReactions", false]
+            ], enabled || settings.store.disableAnimatedMedia || settings.store.disableInlineMedia || settings.store.disableReactions);
+            document.querySelectorAll("video").forEach(updateLiveVideoPlayback);
+            reconcileAllMedia();
+        }
+    },
     pauseWhenDiscordIsHidden: {
         type: OptionType.BOOLEAN,
         description: "Pause playing videos while Discord is in the background",
@@ -58,7 +77,7 @@ const settings = definePluginSettings({
         default: false,
         onChange: enabled => {
             document.querySelectorAll("video").forEach(video => {
-                if (!enabled) resumeOffscreenLiveVideo(video);
+                if (!enabled && !maximumRamModeActive) resumeOffscreenLiveVideo(video);
                 else {
                     viewportObserver?.unobserve(video);
                     viewportObserver?.observe(video);
@@ -74,7 +93,7 @@ const settings = definePluginSettings({
             ["textAndImages", "gifAutoPlay", "savedGifAutoPlay", false],
             ["textAndImages", "animateEmoji", "savedAnimateEmoji", false],
             ["textAndImages", "animateStickers", "savedAnimateStickers", 2]
-        ], enabled)
+        ], enabled || maximumRamModeActive)
     },
     disableInlineMedia: {
         type: OptionType.BOOLEAN,
@@ -84,7 +103,7 @@ const settings = definePluginSettings({
             ["textAndImages", "inlineAttachmentMedia", "savedInlineAttachmentMedia", false],
             ["textAndImages", "inlineEmbedMedia", "savedInlineEmbedMedia", false],
             ["textAndImages", "renderEmbeds", "savedRenderEmbeds", false]
-        ], enabled)
+        ], enabled || maximumRamModeActive)
     },
     disableReactions: {
         type: OptionType.BOOLEAN,
@@ -92,7 +111,7 @@ const settings = definePluginSettings({
         default: false,
         onChange: enabled => applyPreferences([
             ["textAndImages", "renderReactions", "savedRenderReactions", false]
-        ], enabled)
+        ], enabled || maximumRamModeActive)
     },
     savedGifAutoPlay: {
         type: OptionType.SELECT,
@@ -138,6 +157,7 @@ const settings = definePluginSettings({
     }
 });
 
+let maximumRamModeActive = false;
 let viewportObserver: IntersectionObserver | undefined;
 let pageObserver: MutationObserver | undefined;
 let observedMedia = new WeakSet<MediaElement>();
@@ -153,7 +173,7 @@ function resumeOffscreenLiveVideo(video: HTMLVideoElement) {
 }
 
 function updateLiveVideoPlayback(video: HTMLVideoElement) {
-    if (video.srcObject === null || !settings.store.pauseOffscreenLiveVideo) {
+    if (video.srcObject === null || !(settings.store.pauseOffscreenLiveVideo || maximumRamModeActive)) {
         resumeOffscreenLiveVideo(video);
         return;
     }
@@ -227,7 +247,7 @@ function applyPreferences(preferences: Array<[string, string, SavedPreferenceKey
 
 function hasUnloadableSource(media: MediaElement) {
     if (media instanceof HTMLIFrameElement) {
-        if (!settings.store.unloadOffscreenPlayers || !media.hasAttribute("src")) return false;
+        if (!(settings.store.unloadOffscreenPlayers || maximumRamModeActive) || !media.hasAttribute("src")) return false;
 
         try {
             const host = new URL(media.src, location.href).hostname.toLowerCase();
@@ -320,10 +340,10 @@ function reconcileMedia(media: MediaElement) {
 
     const hiddenByApp = document.hidden && (
         settings.store.unloadMediaWhenDiscordIsHidden
-        || (media instanceof HTMLIFrameElement && settings.store.unloadOffscreenPlayers)
+        || (media instanceof HTMLIFrameElement && (settings.store.unloadOffscreenPlayers || maximumRamModeActive))
     );
-    const offscreen = settings.store.unloadOffscreenMedia && !isMediaInViewport(media);
-    const offscreenPlayer = media instanceof HTMLIFrameElement && settings.store.unloadOffscreenPlayers && !isMediaInViewport(media);
+    const offscreen = (settings.store.unloadOffscreenMedia || maximumRamModeActive) && !isMediaInViewport(media);
+    const offscreenPlayer = media instanceof HTMLIFrameElement && (settings.store.unloadOffscreenPlayers || maximumRamModeActive) && !isMediaInViewport(media);
 
     if (hiddenByApp || offscreen || offscreenPlayer) {
         unloadMedia(media);
@@ -363,7 +383,7 @@ function pausePlayingVideos() {
 function onVisibilityChange() {
     if (document.hidden) {
         if (settings.store.pauseWhenDiscordIsHidden) pausePlayingVideos();
-        if (settings.store.pauseOffscreenLiveVideo) {
+        if (settings.store.pauseOffscreenLiveVideo || maximumRamModeActive) {
             document.querySelectorAll("video").forEach(video => {
                 if (video.srcObject !== null && !video.paused) {
                     video.pause();
@@ -384,19 +404,20 @@ export default definePlugin({
     settings,
 
     start() {
+        maximumRamModeActive = settings.store.maximumRamMode;
         applyPreferences([
             ["textAndImages", "gifAutoPlay", "savedGifAutoPlay", false],
             ["textAndImages", "animateEmoji", "savedAnimateEmoji", false],
             ["textAndImages", "animateStickers", "savedAnimateStickers", 2]
-        ], settings.store.disableAnimatedMedia);
+        ], settings.store.disableAnimatedMedia || maximumRamModeActive);
         applyPreferences([
             ["textAndImages", "inlineAttachmentMedia", "savedInlineAttachmentMedia", false],
             ["textAndImages", "inlineEmbedMedia", "savedInlineEmbedMedia", false],
             ["textAndImages", "renderEmbeds", "savedRenderEmbeds", false]
-        ], settings.store.disableInlineMedia);
+        ], settings.store.disableInlineMedia || maximumRamModeActive);
         applyPreferences([
             ["textAndImages", "renderReactions", "savedRenderReactions", false]
-        ], settings.store.disableReactions);
+        ], settings.store.disableReactions || maximumRamModeActive);
 
         viewportObserver = new IntersectionObserver(entries => {
             for (const entry of entries) {
