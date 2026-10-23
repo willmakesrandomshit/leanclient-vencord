@@ -13,7 +13,7 @@ type SavedAttribute = {
     attributes: Array<{ name: string; value: string }>;
 };
 
-type MediaElement = HTMLImageElement | HTMLVideoElement;
+type MediaElement = HTMLImageElement | HTMLVideoElement | HTMLIFrameElement;
 type SavedPreference = "unset" | "boolean:true" | "boolean:false" | "number:0" | "number:1" | "number:2";
 
 const savedPreferenceOptions = [
@@ -29,12 +29,21 @@ const settings = definePluginSettings({
     pauseWhenDiscordIsHidden: {
         type: OptionType.BOOLEAN,
         description: "Pause playing videos while Discord is in the background",
-        default: true
+        default: true,
+        onChange: enabled => {
+            if (enabled && document.hidden) pausePlayingVideos();
+        }
     },
     unloadOffscreenMedia: {
         type: OptionType.BOOLEAN,
         description: "Unload offscreen image and video sources to reduce retained media memory; they reload when scrolled back into view",
         default: true,
+        onChange: () => reconcileAllMedia()
+    },
+    unloadOffscreenPlayers: {
+        type: OptionType.BOOLEAN,
+        description: "Optional: unload supported embedded video and audio players when offscreen or Discord is in the background; playback restarts when they return",
+        default: false,
         onChange: () => reconcileAllMedia()
     },
     unloadMediaWhenDiscordIsHidden: {
@@ -217,6 +226,19 @@ function applyPreferences(preferences: Array<[string, string, SavedPreferenceKey
 }
 
 function hasUnloadableSource(media: MediaElement) {
+    if (media instanceof HTMLIFrameElement) {
+        if (!settings.store.unloadOffscreenPlayers || !media.hasAttribute("src")) return false;
+
+        try {
+            const host = new URL(media.src, location.href).hostname.toLowerCase();
+            return host === "youtube.com" || host.endsWith(".youtube.com")
+                || host === "youtube-nocookie.com" || host.endsWith(".youtube-nocookie.com")
+                || host === "player.twitch.tv" || host === "open.spotify.com"
+                || host === "w.soundcloud.com";
+        } catch {
+            return false;
+        }
+    }
     if (media instanceof HTMLVideoElement && media.srcObject !== null) return false;
     if (media.hasAttribute("src") || (media instanceof HTMLVideoElement && media.hasAttribute("poster"))) return true;
 
@@ -227,12 +249,14 @@ function hasUnloadableSource(media: MediaElement) {
 function snapshotSources(media: MediaElement): SavedAttribute[] {
     const elements: Element[] = media instanceof HTMLVideoElement
         ? [media, ...media.querySelectorAll("source")]
-        : [media, ...(media.closest("picture")?.querySelectorAll("source") ?? [])];
+        : media instanceof HTMLImageElement
+            ? [media, ...(media.closest("picture")?.querySelectorAll("source") ?? [])]
+            : [media];
 
     return elements.map(element => {
         const names = element === media && media instanceof HTMLVideoElement
             ? ["src", "srcset", "poster"]
-            : ["src", "srcset"];
+            : media instanceof HTMLIFrameElement ? ["src"] : ["src", "srcset"];
 
         return {
             element,
@@ -294,10 +318,14 @@ function reconcileMedia(media: MediaElement) {
         return;
     }
 
-    const hiddenByApp = document.hidden && settings.store.unloadMediaWhenDiscordIsHidden;
+    const hiddenByApp = document.hidden && (
+        settings.store.unloadMediaWhenDiscordIsHidden
+        || (media instanceof HTMLIFrameElement && settings.store.unloadOffscreenPlayers)
+    );
     const offscreen = settings.store.unloadOffscreenMedia && !isMediaInViewport(media);
+    const offscreenPlayer = media instanceof HTMLIFrameElement && settings.store.unloadOffscreenPlayers && !isMediaInViewport(media);
 
-    if (hiddenByApp || offscreen) {
+    if (hiddenByApp || offscreen || offscreenPlayer) {
         unloadMedia(media);
         if (hiddenByApp && savedSources.has(media)) hiddenUnloadedMedia.add(media);
         else hiddenUnloadedMedia.delete(media);
@@ -309,7 +337,7 @@ function reconcileMedia(media: MediaElement) {
 
 function reconcileAllMedia() {
     if (!viewportObserver) return;
-    document.querySelectorAll("img, video").forEach(media => reconcileMedia(media as MediaElement));
+    document.querySelectorAll("img, video, iframe").forEach(media => reconcileMedia(media as MediaElement));
 }
 
 function observeMedia(media: MediaElement) {
@@ -322,8 +350,8 @@ function observeMedia(media: MediaElement) {
 function observeTree(node: Node) {
     if (!(node instanceof Element)) return;
 
-    if (node.matches("img, video")) observeMedia(node as MediaElement);
-    node.querySelectorAll("img, video").forEach(media => observeMedia(media as MediaElement));
+    if (node.matches("img, video, iframe")) observeMedia(node as MediaElement);
+    node.querySelectorAll("img, video, iframe").forEach(media => observeMedia(media as MediaElement));
 }
 
 function pausePlayingVideos() {
@@ -351,7 +379,7 @@ function onVisibilityChange() {
 
 export default definePlugin({
     name: "LeanClient",
-    description: "Aggressively reduces automatically loaded media, unloads offscreen media sources, and pauses background videos.",
+    description: "Reduces retained media memory by unloading offscreen media and optionally embedded players.",
     authors: [],
     settings,
 
@@ -382,7 +410,7 @@ export default definePlugin({
             }
         });
 
-        document.querySelectorAll("img, video").forEach(media => observeMedia(media as MediaElement));
+        document.querySelectorAll("img, video, iframe").forEach(media => observeMedia(media as MediaElement));
         pageObserver = new MutationObserver(records => {
             for (const record of records) record.addedNodes.forEach(observeTree);
         });
@@ -409,10 +437,9 @@ export default definePlugin({
         viewportObserver?.disconnect();
         viewportObserver = undefined;
         observedMedia = new WeakSet<MediaElement>();
-        document.querySelectorAll("img, video").forEach(media => restoreMedia(media as MediaElement));
+        document.querySelectorAll("img, video, iframe").forEach(media => restoreMedia(media as MediaElement));
         document.querySelectorAll("video").forEach(video => resumeOffscreenLiveVideo(video));
     },
 
     dependencies: ["UserSettingsAPI"]
 });
-
