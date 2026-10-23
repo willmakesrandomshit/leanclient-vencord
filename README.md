@@ -1,6 +1,6 @@
 # LeanClient for Vencord
 
-LeanClient reduces memory retained by media where a Vencord plugin can safely intervene. It unloads offscreen image and URL-backed video sources, can unload those sources while Discord is hidden, pauses background videos, stops GIF autoplay and animated emoji/stickers, hides inline attachments and embeds, and can hide reactions.
+LeanClient reduces memory retained by media where a Vencord plugin can intervene. It unloads offscreen image and URL-backed video sources, can unload supported third-party embedded players while they are offscreen or Discord is hidden, pauses background videos, stops GIF autoplay and animated emoji/stickers, hides inline attachments and embeds, and can hide reactions.
 
 The defaults preserve normal chat and call features: animations, inline attachments, embeds, reactions, and live call video remain enabled. The lower-impact offscreen and background media controls are on; media may take a moment to reload when you return to it. Optional aggressive switches can disable animation, inline media, or reactions, with those visible tradeoffs. Chromium may retain cached data, so the amount released varies.
 
@@ -15,6 +15,7 @@ Discord's Accessibility settings include reduced motion, GIF autoplay, animated 
 - **Pause when Discord is hidden**: pauses URL-backed videos when Discord is in the background.
 - **Unload offscreen media**: unloads offscreen image and URL-backed video sources, restoring them when visible.
 - **Unload media when Discord is hidden**: unloads image and URL-backed video sources in the background and restores them when Discord returns.
+- **Unload offscreen players**: optional and off by default. Unloads only iframe players hosted by YouTube, YouTube No Cookie, Twitch Player, Spotify, or SoundCloud when offscreen or Discord is hidden. Their playback state may reset and playback reloads when visible; unrelated iframes and call streams are left alone.
 - **Pause offscreen live video**: optionally pauses playback of offscreen live video elements, then resumes them when visible. Off by default to keep call video behaving normally. Voice and outgoing stream transmission remain connected; WebRTC may continue receiving and buffering video.
 - **Disable animated media**: optionally turns off Discord's GIF autoplay and animated emoji and sets sticker animation to Never while LeanClient is active, restoring saved preferences when disabled or stopped. Off by default.
 - **Disable inline media**: optionally turns off inline attachments and embeds. This changes how chat content appears; click links to open media. Off by default, and saved Discord preferences are restored when disabled or stopped.
@@ -26,4 +27,4 @@ This is a custom Vencord user plugin. Put this folder at `src/userplugins/leanCl
 
 ## Verification status
 
-The source has passed Vencord's TypeScript and lint checks and the full package build. It has not been installed or runtime-tested in Discord, and no controlled enabled/disabled RAM, CPU, or GPU comparison has been completed. Savings are unmeasured. In particular, the live-video behavior has not been runtime-tested during a call.
+The source has passed Vencord's TypeScript and lint checks and the full package build. It has not been installed or runtime-tested in Discord, and no controlled enabled/disabled RAM, CPU, or GPU comparison has been completed. Savings are unmeasured. In particular, the live-video and embedded-player behaviors have not been runtime-tested during a call.
