@@ -34,12 +34,14 @@ const settings = definePluginSettings({
     unloadOffscreenMedia: {
         type: OptionType.BOOLEAN,
         description: "Unload offscreen image and video sources to reduce retained media memory; they reload when scrolled back into view",
-        default: true
+        default: true,
+        onChange: () => reconcileAllMedia()
     },
     unloadMediaWhenDiscordIsHidden: {
         type: OptionType.BOOLEAN,
         description: "Unload image and URL-backed video sources while Discord is in the background; they reload when Discord is shown again",
-        default: true
+        default: true,
+        onChange: () => reconcileAllMedia()
     },
     pauseOffscreenLiveVideo: {
         type: OptionType.BOOLEAN,
@@ -278,13 +280,43 @@ function restoreMedia(media: MediaElement) {
     if (media instanceof HTMLVideoElement) media.load();
 }
 
+function isMediaInViewport(media: MediaElement) {
+    const bounds = media.getBoundingClientRect();
+    return bounds.bottom > 0
+        && bounds.right > 0
+        && bounds.top < window.innerHeight
+        && bounds.left < window.innerWidth;
+}
+
+function reconcileMedia(media: MediaElement) {
+    if (media instanceof HTMLVideoElement && media.srcObject !== null) {
+        hiddenUnloadedMedia.delete(media);
+        return;
+    }
+
+    const hiddenByApp = document.hidden && settings.store.unloadMediaWhenDiscordIsHidden;
+    const offscreen = settings.store.unloadOffscreenMedia && !isMediaInViewport(media);
+
+    if (hiddenByApp || offscreen) {
+        unloadMedia(media);
+        if (hiddenByApp && savedSources.has(media)) hiddenUnloadedMedia.add(media);
+        else hiddenUnloadedMedia.delete(media);
+    } else {
+        hiddenUnloadedMedia.delete(media);
+        restoreMedia(media);
+    }
+}
+
+function reconcileAllMedia() {
+    if (!viewportObserver) return;
+    document.querySelectorAll("img, video").forEach(media => reconcileMedia(media as MediaElement));
+}
+
 function observeMedia(media: MediaElement) {
     if (observedMedia.has(media)) return;
     observedMedia.add(media);
     viewportObserver?.observe(media);
-    if (document.hidden && settings.store.unloadMediaWhenDiscordIsHidden && unloadMedia(media)) {
-        hiddenUnloadedMedia.add(media);
-    }
+    reconcileMedia(media);
 }
 
 function observeTree(node: Node) {
@@ -311,19 +343,10 @@ function onVisibilityChange() {
                 }
             });
         }
-        if (settings.store.unloadMediaWhenDiscordIsHidden) {
-            document.querySelectorAll("img, video").forEach(media => {
-                const element = media as MediaElement;
-                if (unloadMedia(element)) hiddenUnloadedMedia.add(element);
-            });
-        }
     } else {
         document.querySelectorAll("video").forEach(video => resumeOffscreenLiveVideo(video));
-        document.querySelectorAll("img, video").forEach(media => {
-            const element = media as MediaElement;
-            if (hiddenUnloadedMedia.has(element)) restoreMedia(element);
-        });
     }
+    reconcileAllMedia();
 }
 
 export default definePlugin({
@@ -355,13 +378,7 @@ export default definePlugin({
                     updateLiveVideoPlayback(media);
                     continue;
                 }
-                if (entry.isIntersecting) {
-                    restoreMedia(media);
-                } else if (settings.store.unloadOffscreenMedia) {
-                    unloadMedia(media);
-                } else if (media instanceof HTMLVideoElement) {
-                    media.pause();
-                }
+                reconcileMedia(media);
             }
         });
 
@@ -398,3 +415,4 @@ export default definePlugin({
 
     dependencies: ["UserSettingsAPI"]
 });
+
